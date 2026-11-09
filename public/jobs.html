@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>职位检索 - 库柯baby职位检索器</title>
+    <link rel="stylesheet" href="/common.css" />
+    <script src="/vendor/sql-wasm.js"></script>
+    <style>
+      .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .page-header h2 {
+        font-size: 20px;
+        font-weight: 600;
+      }
+
+      /* 左右分栏布局 */
+      .layout {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      /* 左侧来源菜单 */
+      .sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        background: #fff;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 0;
+        position: sticky;
+        top: 80px;
+      }
+      .sidebar .menu-title {
+        padding: 8px 20px;
+        font-size: 13px;
+        color: var(--text-tertiary);
+        font-weight: 600;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--text);
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
+      }
+      .menu-item:hover {
+        background: rgba(22, 119, 255, 0.04);
+        color: var(--primary);
+      }
+      .menu-item.active {
+        background: #e6f4ff;
+        color: var(--primary);
+        border-left-color: var(--primary);
+        font-weight: 600;
+      }
+      .menu-item .menu-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .menu-item .menu-icon {
+        width: 20px;
+        text-align: center;
+        font-size: 15px;
+      }
+      .menu-item .menu-count {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        background: #f5f5f5;
+        border-radius: 10px;
+        padding: 1px 8px;
+      }
+      .menu-item.active .menu-count {
+        background: #bae0ff;
+        color: var(--primary);
+      }
+
+      /* 右侧内容区 */
+      .content {
+        flex: 1;
+        min-width: 0;
+      }
+      .stat-bar {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .stat-item {
+        background: #fff;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 16px 20px;
+        flex: 1;
+        min-width: 140px;
+      }
+      .stat-item .num {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--primary);
+      }
+      .stat-item .label {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .toolbar .search-box {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+        min-width: 280px;
+      }
+      .toolbar .search-box .input {
+        flex: 1;
+      }
+      .current-source-tag {
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+      .current-source-tag b {
+        color: var(--primary);
+      }
+      .cell-null {
+        color: var(--text-tertiary);
+        font-style: italic;
+      }
+      .cell-url {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        vertical-align: bottom;
+      }
+      .expand-row {
+        background: #fafafa !important;
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px;
+        padding: 8px 0;
+      }
+      .detail-item {
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+        padding: 10px 12px;
+        background: #fff;
+      }
+      .detail-item .key {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-bottom: 4px;
+      }
+      .detail-item .val {
+        font-size: 13px;
+        word-break: break-all;
+        white-space: pre-wrap;
+      }
+      .detail-item.full {
+        grid-column: 1 / -1;
+      }
+      .detail-item pre {
+        background: #f6f8fa;
+        border-radius: 4px;
+        padding: 10px;
+        overflow-x: auto;
+        font-size: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+        margin: 0;
+      }
+      .expand-btn {
+        cursor: pointer;
+        color: var(--primary);
+        user-select: none;
+        display: inline-block;
+        width: 20px;
+        text-align: center;
+      }
+
+      @media (max-width: 768px) {
+        .layout {
+          flex-direction: column;
+        }
+        .sidebar {
+          width: 100%;
+          position: static;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="logo">🔍 库柯baby职位检索器</div>
+      <div class="nav">
+        <a href="/welcome.html">欢迎</a>
+        <a href="/jobs.html" class="active">职位检索</a>
+      </div>
+    </div>
+
+    <div class="page-container">
+      <div class="page-header">
+        <h2>职位检索</h2>
+        <a href="/login.html" class="btn btn-link">退出登录</a>
+      </div>
+
+      <div class="layout">
+        <!-- 左侧来源菜单 -->
+        <div class="sidebar">
+          <div class="menu-title">数据来源</div>
+          <div id="source-menu">
+            <div class="menu-item" style="cursor:default; color: var(--text-tertiary);">
+              加载中...
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧内容区 -->
+        <div class="content">
+          <!-- 统计栏 -->
+          <div class="stat-bar">
+            <div class="stat-item">
+              <div class="num" id="stat-total">-</div>
+              <div class="label">职位总数</div>
+            </div>
+            <div class="stat-item">
+              <div class="num" id="stat-sources">-</div>
+              <div class="label">来源数量</div>
+            </div>
+            <div class="stat-item">
+              <div class="num" id="stat-companies">-</div>
+              <div class="label">公司数量</div>
+            </div>
+          </div>
+
+          <!-- 工具栏 -->
+          <div class="toolbar">
+            <div class="search-box">
+              <input
+                class="input"
+                id="search-input"
+                type="text"
+                placeholder="搜索职位名称 / 公司 / 城市..."
+              />
+              <button class="btn btn-primary" id="search-btn">查询</button>
+              <button class="btn" id="reset-btn">重置</button>
+            </div>
+            <button class="btn" id="refresh-btn">刷新数据</button>
+          </div>
+
+          <!-- 当前来源提示 -->
+          <div class="current-source-tag" id="current-source-tag"></div>
+
+          <!-- 表格 -->
+          <div class="card" style="margin-top: 8px;">
+            <div id="table-area">
+              <div class="loading"><span class="spinner"></span>正在加载数据库...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ============ 全局状态 ============
+      const PAGE_SIZE = 20;
+      let db = null;
+      let currentPage = 1;
+      let searchKeyword = '';
+      let currentSource = 'all'; // 'all' 或具体 source 值
+      let totalCount = 0;
+      let totalPages = 1;
+
+      // ============ 来源映射（英文 source → 中文名 + 图标） ============
+      const SOURCE_META = {
+        xiaohongshu: { name: '小红书', icon: '📕' },
+        didi: { name: '滴滴', icon: '🚗' },
+        mihoyo: { name: '米哈游', icon: '🎮' },
+        bilibili: { name: '哔哩哔哩', icon: '📺' },
+        iflytek: { name: '科大讯飞', icon: '🎙️' },
+        ctrip: { name: '携程', icon: '✈️' },
+        oppo: { name: 'OPPO', icon: '📱' },
+        pdd: { name: '拼多多', icon: '🛒' },
+      };
+
+      function sourceDisplayName(source) {
+        return SOURCE_META[source]?.name || source;
+      }
+      function sourceIcon(source) {
+        return SOURCE_META[source]?.icon || '🏢';
+      }
+
+      // ============ 字段定义 ============
+      const TABLE_COLUMNS = [
+        { key: 'seq', title: '序号', width: '80px' },
+        { key: 'title', title: '职位名称' },
+        { key: 'company', title: '公司' },
+        { key: 'city_name', title: '城市' },
+        { key: 'source', title: '来源' },
+        { key: 'portal', title: '类型' },
+        { key: 'job_category_name', title: '职位类别' },
+        { key: 'publish_time', title: '发布时间' },
+        { key: 'job_url', title: '职位链接', isLink: true },
+        { key: 'enqueued_at', title: '入队时间' },
+      ];
+
+      const ALL_FIELDS = [
+        'seq', 'source', 'portal', 'batch_id', 'source_site', 'job_id',
+        'title', 'company', 'city_name', 'city_list', 'job_category_name',
+        'job_url', 'publish_time', 'recruitment_name', 'recruitment_type',
+        'type', 'job_hot_flag', 'description', 'requirement',
+        'enqueued_at', 'version',
+      ];
+
+      // ============ 工具函数 ============
+      function escapeHtml(str) {
+        return String(str == null ? '' : str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function parseRow(row) {
+        let payload = {};
+        try {
+          payload = JSON.parse(row.payload || '{}');
+        } catch (e) {
+          payload = { _raw_payload: row.payload };
+        }
+        const merged = { ...payload, ...row };
+        merged._payload_raw = row.payload;
+        delete merged.payload;
+        return merged;
+      }
+
+      function formatValue(val) {
+        if (val === null || val === undefined || val === '') {
+          return '<span class="cell-null">-</span>';
+        }
+        if (typeof val === 'boolean') {
+          return val ? '是' : '否';
+        }
+        if (Array.isArray(val)) {
+          return val.length
+            ? escapeHtml(val.join(', '))
+            : '<span class="cell-null">-</span>';
+        }
+        if (typeof val === 'object') {
+          return escapeHtml(JSON.stringify(val));
+        }
+        return escapeHtml(String(val));
+      }
+
+      // ============ 数据库加载 ============
+      async function loadDatabase() {
+        const area = document.getElementById('table-area');
+        area.innerHTML =
+          '<div class="loading"><span class="spinner"></span>正在加载数据库（约 36MB，请稍候）...</div>';
+
+        try {
+          const SQL = await initSqlJs({
+            locateFile: (file) => `/vendor/${file}`,
+          });
+
+          const resp = await fetch('/db');
+          if (!resp.ok) throw new Error('数据库文件下载失败');
+          const arrayBuffer = await resp.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+
+          db = new SQL.Database(bytes);
+          renderSourceMenu();
+          updateStats();
+          await loadPage(1);
+        } catch (err) {
+          area.innerHTML =
+            '<div class="error-msg">数据库加载失败：' +
+            escapeHtml(err.message || err) +
+            '</div>';
+        }
+      }
+
+      // ============ 来源菜单 ============
+      function renderSourceMenu() {
+        const menuEl = document.getElementById('source-menu');
+        // 从数据库统计各来源数量
+        const sourceCounts = {};
+        try {
+          const r = db.exec(
+            'SELECT source, COUNT(*) AS c FROM pending_jobs GROUP BY source ORDER BY c DESC',
+          );
+          if (r.length) {
+            r[0].values.forEach(([source, c]) => {
+              sourceCounts[source] = c;
+            });
+          }
+        } catch (e) {
+          console.error('统计来源失败', e);
+        }
+
+        const totalAll = Object.values(sourceCounts).reduce((a, b) => a + b, 0);
+
+        let html = '';
+        // 「全部」项
+        html += `
+          <div class="menu-item ${currentSource === 'all' ? 'active' : ''}" data-source="all">
+            <span class="menu-label"><span class="menu-icon">🗂️</span>全部</span>
+            <span class="menu-count">${totalAll}</span>
+          </div>
+        `;
+        // 各来源项
+        Object.keys(sourceCounts).forEach((source) => {
+          const name = sourceDisplayName(source);
+          const icon = sourceIcon(source);
+          html += `
+            <div class="menu-item ${currentSource === source ? 'active' : ''}" data-source="${escapeHtml(source)}">
+              <span class="menu-label"><span class="menu-icon">${icon}</span>${escapeHtml(name)}</span>
+              <span class="menu-count">${sourceCounts[source]}</span>
+            </div>
+          `;
+        });
+        menuEl.innerHTML = html;
+
+        // 绑定点击事件
+        menuEl.querySelectorAll('.menu-item[data-source]').forEach((item) => {
+          item.addEventListener('click', () => {
+            const source = item.dataset.source;
+            if (source === currentSource) return;
+            currentSource = source;
+            currentPage = 1;
+            searchKeyword = '';
+            document.getElementById('search-input').value = '';
+            // 更新菜单高亮
+            menuEl.querySelectorAll('.menu-item').forEach((m) =>
+              m.classList.remove('active'),
+            );
+            item.classList.add('active');
+            updateStats();
+            updateCurrentSourceTag();
+            loadPage(1);
+          });
+        });
+      }
+
+      function updateCurrentSourceTag() {
+        const el = document.getElementById('current-source-tag');
+        if (currentSource === 'all') {
+          el.innerHTML = '当前显示：<b>全部来源</b> 的数据';
+        } else {
+          el.innerHTML =
+            '当前显示：<b>' +
+            escapeHtml(sourceDisplayName(currentSource)) +
+            '</b> 的数据';
+        }
+      }
+
+      function updateStats() {
+        try {
+          let whereClause = '';
+          if (currentSource !== 'all') {
+            whereClause = ` WHERE source = '${currentSource.replace(/'/g, "''")}'`;
+          }
+          const total = db.exec(
+            `SELECT COUNT(*) AS c FROM pending_jobs${whereClause}`,
+          )[0]?.values[0][0];
+          const sources = db.exec(
+            'SELECT COUNT(DISTINCT source) AS c FROM pending_jobs',
+          )[0]?.values[0][0];
+          const companies = db.exec(
+            `SELECT COUNT(DISTINCT json_extract(payload, '$.company')) AS c FROM pending_jobs${whereClause}${whereClause ? ' AND' : ' WHERE'} json_extract(payload, '$.company') IS NOT NULL`,
+          )[0]?.values[0][0];
+
+          document.getElementById('stat-total').textContent = total ?? 0;
+          document.getElementById('stat-sources').textContent = sources ?? 0;
+          document.getElementById('stat-companies').textContent =
+            companies ?? 0;
+        } catch (e) {
+          console.error('统计失败', e);
+        }
+      }
+
+      // ============ 查询 + 分页 ============
+      function buildQuery() {
+        let sql = 'SELECT * FROM pending_jobs';
+        const conditions = [];
+        if (currentSource !== 'all') {
+          conditions.push(`source = '${currentSource.replace(/'/g, "''")}'`);
+        }
+        if (searchKeyword) {
+          const kw = searchKeyword.replace(/'/g, "''");
+          conditions.push(
+            `(payload LIKE '%${kw}%' OR source LIKE '%${kw}%' OR portal LIKE '%${kw}%' OR job_id LIKE '%${kw}%')`,
+          );
+        }
+        if (conditions.length) {
+          sql += ' WHERE ' + conditions.join(' AND ');
+        }
+        sql += ' ORDER BY seq DESC';
+        return sql;
+      }
+
+      function getTotalCount() {
+        const countSql = buildQuery().replace(
+          'SELECT *',
+          'SELECT COUNT(*) AS c',
+        );
+        try {
+          const r = db.exec(countSql);
+          return r[0]?.values[0][0] || 0;
+        } catch (e) {
+          return 0;
+        }
+      }
+
+      function getPageData(page) {
+        const offset = (page - 1) * PAGE_SIZE;
+        const sql = buildQuery() + ` LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
+        const r = db.exec(sql);
+        if (!r.length) return [];
+        const { columns, values } = r[0];
+        return values.map((vals) => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = vals[i];
+          });
+          return parseRow(obj);
+        });
+      }
+
+      async function loadPage(page) {
+        if (!db) return;
+        totalCount = getTotalCount();
+        totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
+        currentPage = page;
+        const data = getPageData(page);
+        renderTable(data);
+      }
+
+      // ============ 渲染 ============
+      function renderDetail(row) {
+        let html = '<div class="detail-grid">';
+        ALL_FIELDS.forEach((key) => {
+          const val = row[key];
+          const isLong = key === 'description' || key === 'requirement';
+          html += `<div class="detail-item${isLong ? ' full' : ''}">`;
+          html += `<div class="key">${key}</div>`;
+          if (val === null || val === undefined || val === '') {
+            html += '<div class="val cell-null">-</div>';
+          } else if (isLong || typeof val === 'object') {
+            const text =
+              typeof val === 'object'
+                ? JSON.stringify(val, null, 2)
+                : String(val);
+            html += `<pre>${escapeHtml(text)}</pre>`;
+          } else {
+            html += `<div class="val">${escapeHtml(String(val))}</div>`;
+          }
+          html += '</div>';
+        });
+
+        html += '<div class="detail-item full">';
+        html += '<div class="key">payload（原始 JSON）</div>';
+        let pretty = '';
+        try {
+          pretty = JSON.stringify(JSON.parse(row._payload_raw || '{}'), null, 2);
+        } catch (e) {
+          pretty = row._payload_raw || '';
+        }
+        html += `<pre>${escapeHtml(pretty)}</pre>`;
+        html += '</div>';
+
+        html += '</div>';
+        return html;
+      }
+
+      function renderTable(rows) {
+        const area = document.getElementById('table-area');
+
+        if (!rows.length) {
+          area.innerHTML =
+            '<div class="empty">暂无数据</div>' + renderPaginationBar();
+          bindPagination(area);
+          return;
+        }
+
+        let html =
+          '<div class="table-wrapper"><table class="data-table"><thead><tr>';
+        html += '<th style="width:40px"></th>';
+        TABLE_COLUMNS.forEach((col) => {
+          html += `<th${col.width ? ` style="width:${col.width}"` : ''}>${col.title}</th>`;
+        });
+        html += '<th style="width:90px">操作</th>';
+        html += '</tr></thead><tbody>';
+
+        rows.forEach((row, idx) => {
+          html += `<tr>`;
+          html += `<td><span class="expand-btn" data-expand="${idx}">▸</span></td>`;
+          TABLE_COLUMNS.forEach((col) => {
+            const val = row[col.key];
+            if (col.key === 'source') {
+              // 来源列显示中文名
+              const name = sourceDisplayName(val);
+              html += `<td><span class="tag tag-blue">${escapeHtml(name)}</span></td>`;
+            } else if (col.isLink) {
+              html += val
+                ? `<td><a class="cell-url" href="${escapeHtml(val)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(val)}">${escapeHtml(val)}</a></td>`
+                : '<td><span class="cell-null">-</span></td>';
+            } else {
+              html += `<td>${formatValue(val)}</td>`;
+            }
+          });
+          html += `<td><a class="btn-link" data-detail="${idx}" style="cursor:pointer">详情</a></td>`;
+          html += '</tr>';
+          html += `<tr class="expand-row" data-detail-row="${idx}" style="display:none"><td></td><td colspan="${TABLE_COLUMNS.length + 1}">${renderDetail(row)}</td></tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        html += renderPaginationBar();
+        area.innerHTML = html;
+        bindTableEvents(area);
+        bindPagination(area);
+      }
+
+      function renderPaginationBar() {
+        let html = '<div class="pagination">';
+        html += `<span>共 ${totalCount} 条，第 ${currentPage} / ${totalPages} 页</span>`;
+        html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" data-page="prev">上一页</button>`;
+        const maxShow = 7;
+        let start = Math.max(1, currentPage - Math.floor(maxShow / 2));
+        let end = Math.min(totalPages, start + maxShow - 1);
+        if (end - start < maxShow - 1) start = Math.max(1, end - maxShow + 1);
+        for (let i = start; i <= end; i++) {
+          html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+        }
+        html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" data-page="next">下一页</button>`;
+        html += '</div>';
+        return html;
+      }
+
+      function bindTableEvents(area) {
+        area.querySelectorAll('.expand-btn').forEach((btn) => {
+          btn.addEventListener('click', () =>
+            toggleDetail(area, btn.dataset.expand),
+          );
+        });
+        area.querySelectorAll('[data-detail]').forEach((link) => {
+          link.addEventListener('click', () =>
+            toggleDetail(area, link.dataset.detail),
+          );
+        });
+      }
+
+      function toggleDetail(area, idx) {
+        const detailRow = area.querySelector(`tr[data-detail-row="${idx}"]`);
+        const expandBtn = area.querySelector(`.expand-btn[data-expand="${idx}"]`);
+        const isHidden = detailRow.style.display === 'none';
+        if (isHidden) {
+          detailRow.style.display = '';
+          if (expandBtn) expandBtn.textContent = '▾';
+        } else {
+          detailRow.style.display = 'none';
+          if (expandBtn) expandBtn.textContent = '▸';
+        }
+      }
+
+      function bindPagination(area) {
+        area.querySelectorAll('.page-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            if (btn.classList.contains('disabled')) return;
+            const p = btn.dataset.page;
+            if (p === 'prev') loadPage(currentPage - 1);
+            else if (p === 'next') loadPage(currentPage + 1);
+            else loadPage(parseInt(p, 10));
+          });
+        });
+      }
+
+      // ============ 事件绑定 ============
+      document.getElementById('search-btn').addEventListener('click', () => {
+        searchKeyword = document.getElementById('search-input').value.trim();
+        loadPage(1);
+      });
+      document.getElementById('search-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          searchKeyword = e.target.value.trim();
+          loadPage(1);
+        }
+      });
+      document.getElementById('reset-btn').addEventListener('click', () => {
+        document.getElementById('search-input').value = '';
+        searchKeyword = '';
+        loadPage(1);
+      });
+      document.getElementById('refresh-btn').addEventListener('click', () => {
+        loadDatabase();
+      });
+
+      // ============ 启动 ============
+      updateCurrentSourceTag();
+      loadDatabase();
+    </script>
+  </body>
+</html>
